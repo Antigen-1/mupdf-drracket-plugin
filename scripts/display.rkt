@@ -90,9 +90,10 @@
             ((#\x) (reset-settings) (draw (current)))))))
 
     (define frame (new frame% [label "mupdf"] [min-width 800] [min-height 600]))
-    (define canvas (new mupdf-canvas% [parent frame]
+    (define canvas (new mupdf-canvas% [parent frame] [style '(hscroll vscroll gl no-autoclear)]
                         [min-width 800] [min-height 600]
                         [paint-callback (lambda (_1 _2) (draw (current)))]))
+    (send canvas init-auto-scrollbars 800 600 0.0 0.0)
     (send canvas enable #t)
     (send canvas focus)
 
