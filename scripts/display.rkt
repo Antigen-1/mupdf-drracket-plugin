@@ -49,7 +49,7 @@
     (define zoom2 1.0)
     (define rotate 0.0)
 
-    (define (current) (pixmap->bitmap (extract-pixmap doc cursor (make-matrix zoom1 zoom2 rotate))))
+    (define (current) (pixmap->bitmap (extract-pixmap doc cursor (make-matrix 1.0 1.0 0.0))))
     (define (last)
       (if (zero? cursor)
           (void)
@@ -102,6 +102,10 @@
     (define-syntax-rule (draw bitmap)
       (let ((bp bitmap))
         (send dc erase)
+        ;; We use racket-side scaling and rotation
+        ;; because copying bytes is terribly expensive.
+        (send dc set-scale zoom1 zoom2)
+        (send dc set-rotation rotate)
         (send dc draw-bitmap bp 0 0)
         (send canvas flush)
         (collect-garbage 'incremental)))
