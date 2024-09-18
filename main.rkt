@@ -25,26 +25,67 @@
 
 ;; Code here
 
+(require quickscript racket/gui/base racket/class racket-mupdf)
 
+(define-script mupdf-script
+  #:label "MuPDF script"
+  #:help-string "Display PDF files in DrRacket"
+  #:shortcut #\p
+  #:shortcut-prefix (ctl alt)
+  #:output-to #f
+  (lambda (_ #:definitions editor)
+    (define file
+      (let loop ()
+        (cond ((get-file "Please choose a PDF file"))
+              (else (loop)))))
 
-(module+ test
-  ;; Any code in this `test` submodule runs when this file is run using DrRacket
-  ;; or with `raco test`. The code here does not run when this file is
-  ;; required by another module.
+    (define ctx (make-context))
+    (define doc (open-document ctx file))
+    (define cnt (document-count-pages doc))
 
-  (check-equal? (+ 2 2) 4))
+    ;; state variables
+    (define cursor 0)
+    (define zoom1 1.0)
+    (define zoom2 1.0)
+    (define rotate 0.0)
 
-(module+ main
-  ;; (Optional) main submodule. Put code here if you need it to be executed when
-  ;; this file is run using DrRacket or the `racket` executable.  The code here
-  ;; does not run when this file is required by another module. Documentation:
-  ;; http://docs.racket-lang.org/guide/Module_Syntax.html#%28part._main-and-test%29
+    (define (current) (pixmap->bitmap (extract-pixmap doc cursor (make-matrix zoom1 zoom2 rotate))))
+    (define (last)
+      (if (zero? cursor)
+          (void)
+          (set! cursor (sub1 cursor)))
+      (current))
+    (define (next)
+      (if (= cursor (sub1 cnt))
+          (void)
+          (set! cursor (add1 cursor)))
+      (current))
+    (define (zoom-in)
+      (set! zoom1 (+ zoom1 0.01))
+      (set! zoom2 (+ zoom2 0.01)))
+    (define (zoom-out)
+      (unless (or (<= zoom1 0.01) (<= zoom2 0.01))
+        (set! zoom1 (- zoom1 0.01))
+        (set! zoom2 (- zoom2 0.01))))
+    (define (rotate1)
+      (set! rotate (+ rotate 10.0)))
+    (define (rotate2)
+      (set! rotate (- rotate 10.0)))
 
-  (require racket/cmdline)
-  (define who (box "world"))
-  (command-line
-    #:program "my-program"
-    #:once-each
-    [("-n" "--name") name "Who to say hello to" (set-box! who name)]
-    #:args ()
-    (printf "hello ~a~n" (unbox who))))
+    (define dc (send editor get-dc))
+
+    (define km (new keymap%))
+    (send km add-function "Page Operation"
+          (lambda (evt)
+            (cond ((is-a? evt key-event%)
+                   (case (send evt get-key-code)
+                     (('left #\a) (send dc draw-bitmap (last)))
+                     (('right #\d) (send dc draw-bitmap (next)))
+                     (('up #\w) (zoom-in) (send dc draw-bitmap (current)))
+                     (('down #\s) (zoom-out) (send dc draw-bitmap (current)))
+                     ((#\q) (rotate1) (send dc draw-bitmap (current)))
+                     ((#\e) (rotate2) (send dc draw-bitmap (current))))))))
+
+    (send editor set-keymap km)
+
+    (send editor draw-bitmap (current))))

@@ -7,4 +7,4 @@
 
 @defmodule[mupdf-drracket-plugin]
 
-Package Description Here
+A DrRacket plugin for rendering PDF files.

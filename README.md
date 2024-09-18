@@ -1,3 +1,3 @@
 mupdf-drracket-plugin
 =====================
-README text here.
+A DrRacket plugin for rendering PDF files.
