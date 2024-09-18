@@ -74,18 +74,21 @@
 
     (define dc (send editor get-dc))
 
+    (define-syntax-rule (draw bitmap)
+      (send dc draw-bitmap bitmap 0 0))
+
     (define km (new keymap%))
     (send km add-function "Page Operation"
           (lambda (_ evt)
             (cond ((is-a? evt key-event%)
                    (case (send evt get-key-code)
-                     (('left #\a) (send dc draw-bitmap (last)))
-                     (('right #\d) (send dc draw-bitmap (next)))
-                     (('up #\w) (zoom-in) (send dc draw-bitmap (current)))
-                     (('down #\s) (zoom-out) (send dc draw-bitmap (current)))
-                     ((#\q) (rotate1) (send dc draw-bitmap (current)))
-                     ((#\e) (rotate2) (send dc draw-bitmap (current))))))))
+                     (('left #\a) (draw (last)))
+                     (('right #\d) (draw (next)))
+                     (('up #\w) (zoom-in) (draw (current)))
+                     (('down #\s) (zoom-out) (draw (current)))
+                     ((#\q) (rotate1) (draw (current)))
+                     ((#\e) (rotate2) (draw (current))))))))
 
     (send editor set-keymap km)
 
-    (send dc draw-bitmap (current))))
+    (draw (current))))
