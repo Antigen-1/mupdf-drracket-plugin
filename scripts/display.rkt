@@ -99,8 +99,8 @@
     (define dc (send canvas get-dc))
 
     (define-syntax-rule (draw bitmap)
-      (let ()
-        (send dc draw-bitmap bitmap 0 0)
+      (let ((bp bitmap))
+        (send dc draw-bitmap bp 0 0)
         (send canvas flush)))
 
     (send frame show #t)))
