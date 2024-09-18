@@ -100,6 +100,7 @@
 
     (define-syntax-rule (draw bitmap)
       (let ((bp bitmap))
+        (send dc erase)
         (send dc draw-bitmap bp 0 0)
         (send canvas flush)))
 
