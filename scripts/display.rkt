@@ -102,6 +102,7 @@
       (let ((bp bitmap))
         (send dc erase)
         (send dc draw-bitmap bp 0 0)
-        (send canvas flush)))
+        (send canvas flush)
+        (collect-garbage 'incremental)))
 
     (send frame show #t)))
