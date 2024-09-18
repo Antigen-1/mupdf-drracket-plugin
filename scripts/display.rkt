@@ -84,9 +84,9 @@
             ((#\q) (rotate1) (draw (current)))
             ((#\e) (rotate2) (draw (current)))))))
 
-    (define frame (new frame% [label "mupdf"] [width 800] [height 600]))
+    (define frame (new frame% [label "mupdf"] [min-width 800] [min-height 600]))
     (define canvas (new mupdf-canvas% [parent frame] [style '(hscroll vscroll)]
-                        [width 800] [height 600]))
+                        [min-width 800] [min-height 600]))
     (send canvas init-auto-scrollbars 800 600 0.5 0.0)
     (send canvas enable #t)
     (send canvas focus)
