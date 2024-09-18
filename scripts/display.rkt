@@ -81,9 +81,9 @@
         (set! zoom1 (- zoom1 0.01))
         (set! zoom2 (- zoom2 0.01))))
     (define (rotate1)
-      (set! rotate (+ rotate 1.0)))
+      (set! rotate (+ rotate 0.15)))
     (define (rotate2)
-      (set! rotate (- rotate 1.0)))
+      (set! rotate (- rotate 0.15)))
     (define (reset-settings)
       (set! rotate 0.0)
       (set! zoom1 1.0)
@@ -95,6 +95,7 @@
       (class canvas%
         (super-new)
         (define/override (on-char evt)
+          (collect-garbage 'incremental)
           (case (send evt get-key-code)
             ((left) (left))
             ((right) (right))
@@ -118,14 +119,13 @@
     (send canvas focus)
 
     (define dc (send canvas get-dc))
+    (send dc set-smoothing 'aligned)
 
-    (define-syntax-rule (draw bitmap)
-      (let ((bp bitmap))
-        (send dc erase)
-        ;; We use racket-side bitmap rotation.
-        (send dc set-rotation rotate)
-        (send dc draw-bitmap bp x y)
-        (send canvas flush)
-        (collect-garbage 'incremental)))
+    (define (draw bp)
+      (send dc erase)
+      ;; We use racket-side bitmap rotation.
+      (send dc set-rotation rotate)
+      (send dc draw-bitmap bp x y)
+      (send canvas flush))
 
     (send frame show #t)))
