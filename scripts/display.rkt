@@ -85,8 +85,9 @@
             ((#\e) (rotate2) (draw (current)))))))
 
     (define frame (new frame% [label "mupdf"] [min-width 800] [min-height 600]))
-    (define canvas (new mupdf-canvas% [parent frame] [style '(hscroll vscroll no-autoclear gl)]
-                        [min-width 800] [min-height 600]))
+    (define canvas (new mupdf-canvas% [parent frame] [style '(hscroll vscroll)]
+                        [min-width 800] [min-height 600]
+                        [paint-callback (lambda (_1 _2) (draw (current)))]))
     (send canvas init-auto-scrollbars 800 600 0.5 0.0)
     (send canvas enable #t)
     (send canvas focus)
@@ -94,8 +95,8 @@
     (define dc (send canvas get-dc))
 
     (define-syntax-rule (draw bitmap)
-      (send dc draw-bitmap bitmap 0 0))
-
-    (draw (current))
+      (let ()
+        (send dc draw-bitmap bitmap 0 0)
+        (send canvas flush)))
 
     (send frame show #t)))
