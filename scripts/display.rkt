@@ -76,7 +76,7 @@
 
     (define km (new keymap%))
     (send km add-function "Page Operation"
-          (lambda (evt)
+          (lambda (_ evt)
             (cond ((is-a? evt key-event%)
                    (case (send evt get-key-code)
                      (('left #\a) (send dc draw-bitmap (last)))
