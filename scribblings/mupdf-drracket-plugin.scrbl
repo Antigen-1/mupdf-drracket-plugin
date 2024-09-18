@@ -1,6 +1,5 @@
 #lang scribble/manual
-@require[@for-label[mupdf-drracket-plugin
-                    racket/base]]
+@require[@for-label[racket/base]]
 
 @title{mupdf-drracket-plugin}
 @author{zhanghao}
