@@ -88,4 +88,4 @@
 
     (send editor set-keymap km)
 
-    (send editor draw-bitmap (current))))
+    (send dc draw-bitmap (current))))
