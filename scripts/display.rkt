@@ -96,4 +96,6 @@
     (define-syntax-rule (draw bitmap)
       (send dc draw-bitmap bitmap 0 0))
 
-    (draw (current))))
+    (draw (current))
+
+    (send frame show #t)))
