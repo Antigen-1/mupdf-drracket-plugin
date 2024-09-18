@@ -33,7 +33,7 @@
   #:shortcut #\p
   #:shortcut-prefix (ctl alt)
   #:output-to #f
-  (lambda (_ #:definitions editor)
+  (lambda (_)
     (define file
       (let loop ()
         (cond ((get-file "Please choose a PDF file"))
@@ -72,23 +72,27 @@
     (define (rotate2)
       (set! rotate (- rotate 10.0)))
 
-    (define dc (send editor get-dc))
+    (define mupdf-canvas%
+      (class canvas%
+        (super-new)
+        (define/override (on-char evt)
+          (case (send evt get-key-code)
+            (('left #\a) (draw (last)))
+            (('right #\d) (draw (next)))
+            (('up #\w) (zoom-in) (draw (current)))
+            (('down #\s) (zoom-out) (draw (current)))
+            ((#\q) (rotate1) (draw (current)))
+            ((#\e) (rotate2) (draw (current)))))))
+
+    (define frame (new frame% [label "mupdf"] [width 810] [height 610]))
+    (define canvas (new mupdf-canvas% [parent frame] [style '(hscroll vscroll)]))
+    (send canvas init-auto-scrollbars 800 600 0.5 0.0)
+    (send canvas enable #t)
+    (send canvas focus)
+
+    (define dc (send canvas get-dc))
 
     (define-syntax-rule (draw bitmap)
       (send dc draw-bitmap bitmap 0 0))
-
-    (define km (new keymap%))
-    (send km add-function "Page Operation"
-          (lambda (_ evt)
-            (cond ((is-a? evt key-event%)
-                   (case (send evt get-key-code)
-                     (('left #\a) (draw (last)))
-                     (('right #\d) (draw (next)))
-                     (('up #\w) (zoom-in) (draw (current)))
-                     (('down #\s) (zoom-out) (draw (current)))
-                     ((#\q) (rotate1) (draw (current)))
-                     ((#\e) (rotate2) (draw (current))))))))
-
-    (send editor set-keymap km)
 
     (draw (current))))
