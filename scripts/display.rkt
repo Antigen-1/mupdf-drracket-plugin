@@ -71,24 +71,28 @@
       (set! rotate (+ rotate 10.0)))
     (define (rotate2)
       (set! rotate (- rotate 10.0)))
+    (define (reset-settings)
+      (set! rotate 0.0)
+      (set! zoom1 1.0)
+      (set! zoom2 1.0))
 
     (define mupdf-canvas%
       (class canvas%
         (super-new)
         (define/override (on-char evt)
           (case (send evt get-key-code)
-            (('left #\a) (draw (last)))
-            (('right #\d) (draw (next)))
-            (('up #\w) (zoom-in) (draw (current)))
-            (('down #\s) (zoom-out) (draw (current)))
+            ((left #\a) (draw (last)))
+            ((right #\d) (draw (next)))
+            ((up #\w) (zoom-in) (draw (current)))
+            ((down #\s) (zoom-out) (draw (current)))
             ((#\q) (rotate1) (draw (current)))
-            ((#\e) (rotate2) (draw (current)))))))
+            ((#\e) (rotate2) (draw (current)))
+            ((#\x) (reset-settings) (draw (current)))))))
 
     (define frame (new frame% [label "mupdf"] [min-width 800] [min-height 600]))
-    (define canvas (new mupdf-canvas% [parent frame] [style '(hscroll vscroll)]
+    (define canvas (new mupdf-canvas% [parent frame]
                         [min-width 800] [min-height 600]
                         [paint-callback (lambda (_1 _2) (draw (current)))]))
-    (send canvas init-auto-scrollbars 800 600 0.5 0.0)
     (send canvas enable #t)
     (send canvas focus)
 
