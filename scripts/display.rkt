@@ -68,7 +68,8 @@
 
       (define frame (new frame% [label "mupdf"] [min-width 800] [min-height 600]))
       (define canvas (new mupdf-canvas% [parent frame] [style '(hscroll vscroll)]
-                          [min-width 800] [min-height 600]))
+                          [min-width 800] [min-height 600]
+                          [paint-callback (lambda (c d) (send d clear) (send c flush))]))
       (define dc (send canvas get-dc))
 
       (send dc set-smoothing 'aligned)
@@ -87,7 +88,7 @@
                              (call-with-semaphore
                               sema
                               (lambda ()
-                                (send dc erase)
+                                (send dc clear)
                                 ;; We use racket-side bitmap rotation.
                                 (send dc set-rotation nr)
                                 (send dc draw-bitmap bp nx ny)
