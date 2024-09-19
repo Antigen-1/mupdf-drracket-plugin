@@ -140,4 +140,5 @@
                                  nr nx ny))
                             (internal-loop nc nz1 nz2 nr nx ny)))))))))))
 
+      (async-channel-put event-channel 'reset-settings)
       (send frame show #t))))
