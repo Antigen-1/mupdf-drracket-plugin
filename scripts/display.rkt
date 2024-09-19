@@ -38,9 +38,6 @@
       (define open-document/ctx (open-document (make-context)))
 
       (define event-channel (make-async-channel 5))
-      (define bitmap-channel (make-async-channel 5))
-
-      (define sema (make-semaphore 1))
 
       (define mupdf-canvas%
         (class canvas%
@@ -76,24 +73,8 @@
       (send canvas enable #t)
       (send canvas focus)
 
-      ;; Display the bitmap
-      (define display-thread
-        (thread (lambda ()
-                  (let loop ()
-                    (sync (handle-evt
-                           bitmap-channel
-                           (match-lambda**
-                            ((`(,bp ,nr ,nx ,ny))
-                             (call-with-semaphore
-                              sema
-                              (lambda ()
-                                (send dc clear)
-                                ;; We use racket-side bitmap rotation.
-                                (send dc set-rotation nr)
-                                (send dc draw-bitmap bp nx ny)
-                                (send canvas flush)))
-                             (loop)))))))))
-      ;; Render the page
+      ;; The client thread
+      ;; The main thread is used as the server thread
       (define render-thread
         (thread
          (lambda ()
@@ -101,11 +82,8 @@
              ;; session-switching loop
              (let loop ()
                (define file
-                 (cond ((call-with-semaphore
-                         sema
-                         (lambda ()
-                           (get-file "Please choose a PDF file" frame #f #f ".pdf"
-                                     '(common) '(("PDF files" "*.pdf"))))))
+                 (cond ((get-file "Please choose a PDF file" frame #f #f ".pdf"
+                                  '(common) '(("PDF files" "*.pdf"))))
                        (else (cc (void)))))
                (define doc (open-document/ctx file))
                (define cnt (document-count-pages doc))
@@ -133,11 +111,14 @@
                                          ((down) (vector-update vec 5 (lambda (n) (+ n 10.0))))
                                          ((reset-settings) (vector cursor 1.0 1.0 0.0 0.0 0.0))
                                          ((next-session) (break (loop))))))
-                            (sync
-                             (async-channel-put-evt
-                              bitmap-channel
-                              (list (pixmap->bitmap ((extract-pixmap doc (make-matrix nz1 nz2 0.0)) cursor))
-                                    nr nx ny)))
+
+                            ;; Rendering
+                            (send dc clear)
+                            ;; We use racket-side bitmap rotation
+                            (send dc set-rotation nr)
+                            (send dc draw-bitmap (pixmap->bitmap ((extract-pixmap doc (make-matrix nz1 nz2 0.0)) cursor)) nx ny)
+                            (send canvas flush)
+
                             (internal-loop nc nz1 nz2 nr nx ny)))))))))))
 
       (async-channel-put event-channel 'reset-settings)
