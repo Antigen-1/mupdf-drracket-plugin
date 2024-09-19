@@ -91,8 +91,8 @@
           (set! x 0.0)
           (set! y 0.0))
         (define (next-session)
+          (send frame show #f)
           (send frame delete-child canvas)
-          (send frame refresh)
           (cc (loop)))
 
         (define mupdf-canvas%
@@ -133,6 +133,4 @@
           (send dc draw-bitmap bp x y)
           (send canvas flush))
 
-        (send frame refresh))
-
-      (send frame show #t))))
+        (send frame show #t)))))
