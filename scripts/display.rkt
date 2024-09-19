@@ -121,5 +121,5 @@
 
                             (internal-loop nc nz1 nz2 nr nx ny)))))))))))
 
-      (channel-put event-channel 'reset-settings)
+      (void (thread (lambda () (channel-put event-channel 'reset-settings))))
       (send frame show #t))))
