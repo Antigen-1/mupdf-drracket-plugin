@@ -37,7 +37,7 @@
     (let/cc cc
       (define open-document/ctx (open-document (make-context)))
 
-      (define event-channel (make-channel))
+      (define cont (box #f))
 
       (define mupdf-canvas%
         (class canvas%
@@ -45,8 +45,7 @@
           (define/override (on-char evt)
             (collect-garbage 'incremental)
             (let/cc ex
-              (channel-put
-               event-channel
+              ((unbox cont)
                (case (send evt get-key-code)
                  ((left) 'left)
                  ((right) 'right)
@@ -73,53 +72,48 @@
       (send canvas enable #t)
       (send canvas focus)
 
-      ;; The client thread
-      ;; The main thread is used as the server thread
-      (define render-thread
-        (thread
-         (lambda ()
-           (let/cc break
-             ;; session-switching loop
-             (let loop ()
-               (define file
-                 (cond ((get-file "Please choose a PDF file" frame #f #f ".pdf"
-                                  '(common) '(("PDF files" "*.pdf"))))
-                       (else (cc (void)))))
-               (define doc (open-document/ctx file))
-               (define cnt (document-count-pages doc))
-               ;; page-rendering loop
-               (let internal-loop ((cursor 0) (zoom1 1.0) (zoom2 1.0) (rotate 0.0) (x 0.0) (y 0.0))
-                 (define vec (vector cursor zoom1 zoom2 rotate x y))
-                 (define (vector-update vec pos proc)
-                   (define nv (vector-copy vec))
-                   (vector-set! nv pos (proc (vector-ref vec pos)))
-                   nv)
-                 (sync (handle-evt
-                        event-channel
-                        (lambda (instruction)
-                          (match-let (((vector nc nz1 nz2 nr nx ny)
-                                       (case instruction
-                                         ((last) (vector-update vec 0 (lambda (n) (if (zero? n) n (sub1 n)))))
-                                         ((next) (vector-update vec 0 (lambda (n) (if (>= n (sub1 cnt)) n (add1 n)))))
-                                         ((zoom-in) (vector-update (vector-update vec 1 (lambda (n) (+ n 0.01))) 2 (lambda (n) (+ n 0.01))))
-                                         ((zoom-out) (vector-update (vector-update vec 1 (lambda (n) (- n 0.01))) 2 (lambda (n) (- n 0.01))))
-                                         ((rotate1) (vector-update vec 3 (lambda (n) (- n 0.15))))
-                                         ((rotate2) (vector-update vec 3 (lambda (n) (+ n 0.15))))
-                                         ((left) (vector-update vec 4 (lambda (n) (- n 10.0))))
-                                         ((right) (vector-update vec 4 (lambda (n) (+ n 10.0))))
-                                         ((up) (vector-update vec 5 (lambda (n) (- n 10.0))))
-                                         ((down) (vector-update vec 5 (lambda (n) (+ n 10.0))))
-                                         ((reset-settings) (vector cursor 1.0 1.0 0.0 0.0 0.0))
-                                         ((next-session) (break (loop))))))
+      (define (open-pdf-document)
+        (cond ((get-file "Please choose a PDF file" frame #f #f ".pdf"
+                         '(common) '(("PDF files" "*.pdf")))
+               => open-document/ctx)
+              (else (cc (void)))))
+      (define (init-renderer)
+        (define nd (open-pdf-document))
+        (define ncnt (document-count-pages nd))
+        (define ncont ((render nd ncnt)))
+        (set-box! cont ncont)
+        (ncont 'reset-settings))
+      (define (((render doc cnt) (cursor 0) (zoom1 1.0) (zoom2 1.0) (rotate 0.0) (x 0.0) (y 0.0)) instruction)
+        (let/cc ex
+          (define vec (vector cursor zoom1 zoom2 rotate x y))
+          (define (vector-update vec pos proc)
+            (define nv (vector-copy vec))
+            (vector-set! nv pos (proc (vector-ref vec pos)))
+            nv)
+          (match-let (((vector nc nz1 nz2 nr nx ny)
+                       (case instruction
+                         ((last) (vector-update vec 0 (lambda (n) (if (zero? n) n (sub1 n)))))
+                         ((next) (vector-update vec 0 (lambda (n) (if (>= n (sub1 cnt)) n (add1 n)))))
+                         ((zoom-in) (vector-update (vector-update vec 1 (lambda (n) (+ n 0.01))) 2 (lambda (n) (+ n 0.01))))
+                         ((zoom-out) (vector-update (vector-update vec 1 (lambda (n) (- n 0.01))) 2 (lambda (n) (- n 0.01))))
+                         ((rotate1) (vector-update vec 3 (lambda (n) (- n 0.15))))
+                         ((rotate2) (vector-update vec 3 (lambda (n) (+ n 0.15))))
+                         ((left) (vector-update vec 4 (lambda (n) (- n 10.0))))
+                         ((right) (vector-update vec 4 (lambda (n) (+ n 10.0))))
+                         ((up) (vector-update vec 5 (lambda (n) (- n 10.0))))
+                         ((down) (vector-update vec 5 (lambda (n) (+ n 10.0))))
+                         ((reset-settings) (vector cursor 1.0 1.0 0.0 0.0 0.0))
+                         ((next-session) (ex (init-renderer))))))
 
-                            ;; Rendering
-                            (send dc clear)
-                            ;; We use racket-side bitmap rotation
-                            (send dc set-rotation nr)
-                            (send dc draw-bitmap (pixmap->bitmap ((extract-pixmap doc (make-matrix nz1 nz2 0.0)) cursor)) nx ny)
-                            (send canvas flush)
+            ;; Rendering
+            (send dc clear)
+            ;; We use racket-side bitmap rotation
+            (send dc set-rotation nr)
+            (send dc draw-bitmap (pixmap->bitmap ((extract-pixmap doc (make-matrix nz1 nz2 0.0)) cursor)) nx ny)
+            (send canvas flush)
 
-                            (internal-loop nc nz1 nz2 nr nx ny)))))))))))
+            (set-box! cont ((render doc cnt) nc nz1 nz2 nr nx ny)))))
 
-      (void (thread (lambda () (channel-put event-channel 'reset-settings))))
+      (init-renderer)
+
       (send frame show #t))))
