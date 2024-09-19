@@ -25,7 +25,7 @@
 
 ;; Code here
 
-(require quickscript racket/gui/base racket/class racket/async-channel racket/vector racket/match racket-mupdf)
+(require quickscript racket/gui/base racket/class racket/vector racket/match racket-mupdf)
 
 (define-script pdf-display-script
   #:label "PDF displayer"
@@ -37,7 +37,7 @@
     (let/cc cc
       (define open-document/ctx (open-document (make-context)))
 
-      (define event-channel (make-async-channel 5))
+      (define event-channel (make-channel))
 
       (define mupdf-canvas%
         (class canvas%
@@ -45,7 +45,7 @@
           (define/override (on-char evt)
             (collect-garbage 'incremental)
             (let/cc ex
-              (async-channel-put
+              (channel-put
                event-channel
                (case (send evt get-key-code)
                  ((left) 'left)
@@ -121,5 +121,5 @@
 
                             (internal-loop nc nz1 nz2 nr nx ny)))))))))))
 
-      (async-channel-put event-channel 'reset-settings)
+      (channel-put event-channel 'reset-settings)
       (send frame show #t))))
