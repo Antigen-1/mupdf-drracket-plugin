@@ -68,8 +68,7 @@
 
       (define frame (new frame% [label "mupdf"] [min-width 800] [min-height 600]))
       (define canvas (new mupdf-canvas% [parent frame] [style '(hscroll vscroll)]
-                          [min-width 800] [min-height 600]
-                          [paint-callback (lambda (c d) (send d clear) (send c flush))]))
+                          [min-width 800] [min-height 600]))
       (define dc (send canvas get-dc))
 
       (send dc set-smoothing 'aligned)
