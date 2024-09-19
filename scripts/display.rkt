@@ -25,7 +25,7 @@
 
 ;; Code here
 
-(require quickscript racket/gui/base racket/class racket-mupdf)
+(require quickscript racket/gui/base racket/class racket/async-channel racket/vector racket/match racket-mupdf)
 
 (define-script pdf-display-script
   #:label "PDF displayer"
@@ -34,105 +34,109 @@
   #:shortcut-prefix (ctl alt)
   #:output-to #f
   (lambda (_)
-    (define ctx (make-context))
-    (define frame (new frame% [label "mupdf"] [min-width 800] [min-height 600]))
-
-    (define doc-opener (open-document ctx))
-
     (let/cc cc
-      (let loop ()
-        (define file
-          (cond ((get-file "Please choose a PDF file" frame #f #f ".pdf"
-                           '(common) '(("PDF files" "*.pdf"))))
-                (else (cc (void)))))
+      (define open-document/ctx (open-document (make-context)))
 
-        (define doc (doc-opener file))
-        (define cnt (document-count-pages doc))
+      (define event-channel (make-async-channel))
+      (define bitmap-channel (make-async-channel))
 
-        ;; state variables
-        (define cursor 0)
-        (define zoom1 1.0)
-        (define zoom2 1.0)
-        (define rotate 0.0)
-        (define x 0.0)
-        (define y 0.0)
+      (define sema (make-semaphore 1))
 
-        ;; Instructions
-        (define (current) (pixmap->bitmap ((extract-pixmap doc (make-matrix zoom1 zoom2 0.0)) cursor)))
-        (define (last)
-          (if (zero? cursor)
-              (void)
-              (set! cursor (sub1 cursor))))
-        (define (next)
-          (if (= cursor (sub1 cnt))
-              (void)
-              (set! cursor (add1 cursor))))
-        (define (left)
-          (set! x (- x 10.0)))
-        (define (right)
-          (set! x (+ x 10.0)))
-        (define (up)
-          (set! y (- y 10.0)))
-        (define (down)
-          (set! y (+ y 10.0)))
-        (define (zoom-in)
-          (set! zoom1 (+ zoom1 0.01))
-          (set! zoom2 (+ zoom2 0.01)))
-        (define (zoom-out)
-          (unless (or (<= zoom1 0.01) (<= zoom2 0.01))
-            (set! zoom1 (- zoom1 0.01))
-            (set! zoom2 (- zoom2 0.01))))
-        (define (rotate1)
-          (set! rotate (+ rotate 0.15)))
-        (define (rotate2)
-          (set! rotate (- rotate 0.15)))
-        (define (reset-settings)
-          (set! rotate 0.0)
-          (set! zoom1 1.0)
-          (set! zoom2 1.0)
-          (set! x 0.0)
-          (set! y 0.0))
-        (define (next-session)
-          (send frame show #f)
-          (send frame delete-child canvas)
-          (cc (loop)))
+      (define mupdf-canvas%
+        (class canvas%
+          (super-new)
+          (define/override (on-char evt)
+            (collect-garbage 'incremental)
+            (let/cc ex
+              (async-channel-put
+               event-channel
+               (case (send evt get-key-code)
+                 ((left) 'left)
+                 ((right) 'right)
+                 ((up) 'up)
+                 ((down) 'down)
+                 ((#\a) 'last)
+                 ((#\d) 'next)
+                 ((#\w) 'zoom-in)
+                 ((#\s) 'zoom-out)
+                 ((#\q) 'rotate1)
+                 ((#\e) 'rotate2)
+                 ((#\x) 'reset-settings)
+                 ((#\c) (collect-garbage) (ex (void)))
+                 ((#\z) 'next-session)
+                 (else (ex (void)))))))))
 
-        (define mupdf-canvas%
-          (class canvas%
-            (super-new)
-            (define/override (on-char evt)
-              (collect-garbage 'incremental)
-              (case (send evt get-key-code)
-                ((left) (left))
-                ((right) (right))
-                ((up) (up))
-                ((down) (down))
-                ((#\a) (last))
-                ((#\d) (next))
-                ((#\w) (zoom-in))
-                ((#\s) (zoom-out))
-                ((#\q) (rotate1))
-                ((#\e) (rotate2))
-                ((#\x) (reset-settings))
-                ((#\c) (collect-garbage))
-                ((#\z) (next-session)))
-              (draw (current)))))
+      (define frame (new frame% [label "mupdf"] [min-width 800] [min-height 600]))
+      (define canvas (new mupdf-canvas% [parent frame] [style '(hscroll vscroll)]
+                          [min-width 800] [min-height 600]))
+      (define dc (send canvas get-dc))
 
-        (define canvas (new mupdf-canvas% [parent frame] [style '(hscroll vscroll)]
-                            [min-width 800] [min-height 600]
-                            [paint-callback (lambda (_1 _2) (draw (current)))]))
-        (send canvas init-auto-scrollbars 1600 1200 0 0)
-        (send canvas enable #t)
-        (send canvas focus)
+      (send dc set-smoothing 'aligned)
+      (send canvas init-auto-scrollbars 1600 1200 0 0)
+      (send canvas enable #t)
+      (send canvas focus)
 
-        (define dc (send canvas get-dc))
-        (send dc set-smoothing 'aligned)
+      ;; Display the bitmap
+      (define display-thread
+        (thread (lambda ()
+                  (let loop ()
+                    (sync (handle-evt
+                           bitmap-channel
+                           (match-lambda**
+                            ((`(,bp ,nr ,nx ,ny))
+                             (call-with-semaphore
+                              sema
+                              (lambda ()
+                                (send dc erase)
+                                ;; We use racket-side bitmap rotation.
+                                (send dc set-rotation nr)
+                                (send dc draw-bitmap bp nx ny)
+                                (send canvas flush)))
+                             (loop)))))))))
+      ;; Render the page
+      (define render-thread
+        (thread
+         (lambda ()
+           (let/cc break
+             ;; session-switching loop
+             (let loop ()
+               (define file
+                 (cond ((call-with-semaphore
+                         sema
+                         (lambda ()
+                           (get-file "Please choose a PDF file" frame #f #f ".pdf"
+                                     '(common) '(("PDF files" "*.pdf"))))))
+                       (else (cc (void)))))
+               (define doc (open-document/ctx file))
+               (define cnt (document-count-pages doc))
+               ;; page-rendering loop
+               (let internal-loop ((cursor 0) (zoom1 1.0) (zoom2 1.0) (rotate 0.0) (x 0.0) (y 0.0))
+                 (define vec (vector cursor zoom1 zoom2 rotate x y))
+                 (define (vector-update vec pos proc)
+                   (define nv (vector-copy vec))
+                   (vector-set! nv pos (proc (vector-ref vec pos)))
+                   nv)
+                 (sync (handle-evt
+                        event-channel
+                        (lambda (instruction)
+                          (match-let (((vector nc nz1 nz2 nr nx ny)
+                                       (case instruction
+                                         ((last) (vector-update vec 0 (lambda (n) (if (zero? n) n (sub1 n)))))
+                                         ((next) (vector-update vec 0 (lambda (n) (if (>= n (sub1 cnt)) n (add1 n)))))
+                                         ((zoom-in) (vector-update (vector-update vec 1 (lambda (n) (+ n 0.01))) 2 (lambda (n) (+ n 0.01))))
+                                         ((zoom-out) (vector-update (vector-update vec 1 (lambda (n) (- n 0.01))) 2 (lambda (n) (- n 0.01))))
+                                         ((rotate1) (vector-update vec 3 (lambda (n) (- n 0.15))))
+                                         ((rotate2) (vector-update vec 3 (lambda (n) (+ n 0.15))))
+                                         ((left) (vector-update vec 4 (lambda (n) (- n 10.0))))
+                                         ((right) (vector-update vec 4 (lambda (n) (+ n 10.0))))
+                                         ((up) (vector-update vec 5 (lambda (n) (- n 10.0))))
+                                         ((down) (vector-update vec 5 (lambda (n) (+ n 10.0))))
+                                         ((reset-settings) (vector cursor 1.0 1.0 0.0 0.0 0.0))
+                                         ((next-session) (break (loop))))))
+                            (async-channel-put
+                             bitmap-channel
+                             (list (pixmap->bitmap ((extract-pixmap doc (make-matrix nz1 nz2 0.0)) cursor))
+                                 nr nx ny))
+                            (internal-loop nc nz1 nz2 nr nx ny)))))))))))
 
-        (define (draw bp)
-          (send dc erase)
-          ;; We use racket-side bitmap rotation.
-          (send dc set-rotation rotate)
-          (send dc draw-bitmap bp x y)
-          (send canvas flush))
-
-        (send frame show #t)))))
+      (send frame show #t))))
