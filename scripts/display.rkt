@@ -37,8 +37,8 @@
     (let/cc cc
       (define open-document/ctx (open-document (make-context)))
 
-      (define event-channel (make-async-channel))
-      (define bitmap-channel (make-async-channel))
+      (define event-channel (make-async-channel 5))
+      (define bitmap-channel (make-async-channel 5))
 
       (define sema (make-semaphore 1))
 
@@ -134,10 +134,11 @@
                                          ((down) (vector-update vec 5 (lambda (n) (+ n 10.0))))
                                          ((reset-settings) (vector cursor 1.0 1.0 0.0 0.0 0.0))
                                          ((next-session) (break (loop))))))
-                            (async-channel-put
-                             bitmap-channel
-                             (list (pixmap->bitmap ((extract-pixmap doc (make-matrix nz1 nz2 0.0)) cursor))
-                                 nr nx ny))
+                            (sync
+                             (async-channel-put-evt
+                              bitmap-channel
+                              (list (pixmap->bitmap ((extract-pixmap doc (make-matrix nz1 nz2 0.0)) cursor))
+                                    nr nx ny)))
                             (internal-loop nc nz1 nz2 nr nx ny)))))))))))
 
       (async-channel-put event-channel 'reset-settings)
