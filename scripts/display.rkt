@@ -37,6 +37,8 @@
     (define ctx (make-context))
     (define frame (new frame% [label "mupdf"] [min-width 800] [min-height 600]))
 
+    (define doc-opener (open-document ctx))
+
     (let/cc cc
       (let loop ()
         (define file
@@ -44,7 +46,7 @@
                            '(common) '(("PDF files" "*.pdf"))))
                 (else (cc (void)))))
 
-        (define doc (open-document ctx file))
+        (define doc (doc-opener file))
         (define cnt (document-count-pages doc))
 
         ;; state variables
@@ -56,7 +58,7 @@
         (define y 0.0)
 
         ;; Instructions
-        (define (current) (pixmap->bitmap (extract-pixmap doc cursor (make-matrix zoom1 zoom2 0.0))))
+        (define (current) (pixmap->bitmap ((extract-pixmap doc (make-matrix zoom1 zoom2 0.0)) cursor)))
         (define (last)
           (if (zero? cursor)
               (void)
