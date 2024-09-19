@@ -41,7 +41,7 @@
       (let loop ()
         (define file
           (cond ((get-file "Please choose a PDF file" frame #f #f ".pdf"
-                           '(common) (list "PDF files" "*.pdf")))
+                           '(common) '(("PDF files" "*.pdf"))))
                 (else (cc (void)))))
 
         (define doc (open-document ctx file))
