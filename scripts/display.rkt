@@ -40,9 +40,9 @@
     (let/cc cc
       (let loop ()
         (define file
-          (let loop ()
-            (cond ((get-file "Please choose a PDF file"))
-                  (else (loop)))))
+          (cond ((get-file "Please choose a PDF file" frame #f #f ".pdf"
+                           '(common) (list "PDF files" "*.pdf")))
+                (else (cc (void)))))
 
         (define doc (open-document ctx file))
         (define cnt (document-count-pages doc))
