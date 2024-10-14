@@ -7,3 +7,5 @@
 (define version "0.0")
 (define pkg-authors '(zhanghao))
 (define license '(Apache-2.0 OR MIT))
+(define racket-launcher-names '("display-pdf"))
+(define racket-launcher-libraries (list (build-path "scripts" "display.rkt")))
