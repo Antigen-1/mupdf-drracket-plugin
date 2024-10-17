@@ -1,6 +1,6 @@
 #lang info
 (define collection "mupdf-drracket-plugin")
-(define deps '("base" "git://github.com/Antigen-1/racket-mupdf.git" "quickscript" "gui-lib"))
+(define deps '("base" "git://github.com/Antigen-1/racket-mupdf.git" "quickscript" "gui-lib" "pict-lib"))
 (define build-deps '("scribble-lib" "racket-doc" "rackunit-lib"))
 (define scribblings '(("scribblings/mupdf-drracket-plugin.scrbl" ())))
 (define pkg-desc "Description Here")

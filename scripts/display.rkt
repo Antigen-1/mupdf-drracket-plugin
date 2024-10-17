@@ -26,14 +26,11 @@
 ;; Code here
 
 (require quickscript
-         racket/gui/base racket/class racket/match racket/case racket/async-channel racket/runtime-path
+         racket/gui/base racket/class racket/match racket/case racket/async-channel
          racket-mupdf
+         "../private/help.rkt"
          (for-syntax racket/base))
 (provide pdf-display-script)
-
-(define-runtime-path logo (build-path 'up "resources" "logo.jpg"))
-
-(define logo-bitmap (make-object bitmap% logo 'jpeg #f #f 2.0))
 
 (define-script pdf-display-script
   #:label "PDF displayer"
@@ -73,7 +70,7 @@
                        ((#\z) 'next-session)
                        (else (ex (void)))))))))
 
-    (define window-style '(common))
+    (define window-style '())
     (define window-name "mupdf")
 
     (define frame (new frame% [label window-name] [min-width 800] [min-height 600]))
@@ -170,7 +167,7 @@
             (send dc draw-bitmap (load-page sts/f) x y))
           (let ()
             (send dc clear)
-            (send dc draw-bitmap logo-bitmap 0.0 0.0))))
+            (send dc draw-bitmap help-bitmap 0.0 0.0))))
 
     ;; The main thread is used as the server thread
     (define client-thread
