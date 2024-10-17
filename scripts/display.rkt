@@ -70,7 +70,7 @@
                        ((#\z) 'next-session)
                        (else (ex (void)))))))))
 
-    (define window-style '())
+    (define file-choosing-window-style '())
     (define window-name "mupdf")
 
     (define frame (new frame% [label window-name] [min-width 800] [min-height 600]))
@@ -85,24 +85,26 @@
     (send canvas focus)
 
     ;; Rotation using racket-mupdf is currently buggy
-    (struct states (doc cnt cursor zoom1 zoom2 #;rotate x y) #:constructor-name make-states)
+    (struct states (doc cnt cursor bitmap zoom1 zoom2 #;rotate x y) #:constructor-name make-states)
 
     ;; Auxiliary functions
     (define (open-pdf-document)
       (cond ((get-file "Please choose a PDF file" frame #f #f ".pdf"
-                       window-style'(("PDF files" "*.pdf")))
+                       file-choosing-window-style '(("PDF files" "*.pdf")))
              => open-document/ctx)
             (else #f)))
     (define (new-session-states orig)
       (define doc (open-pdf-document))
       (cond (doc
              (define cnt (document-count-pages doc))
-             (make-states doc cnt 0 1.0 1.0 #;0.0 0.0 0.0))
+             (if (zero? cnt)
+                 (begin (message-box "mupdf" "This is an empty pdf document." frame '(ok)) orig)
+                 (load-page (make-states doc cnt 0 #f 1.0 1.0 #;0.0 0.0 0.0))))
             (else orig)))
     (define (load-page sts)
       (match sts
-        ((states doc cnt cursor zoom1 zoom2 #;rotate _ _)
-         (pixmap->bitmap ((extract-pixmap doc (make-matrix zoom1 zoom2 #;rotate 0.0)) cursor)))))
+        ((states doc cnt cursor _ zoom1 zoom2 #;rotate _ _)
+         (struct-copy states sts (bitmap (pixmap->bitmap ((extract-pixmap doc (make-matrix zoom1 zoom2 #;rotate 0.0)) cursor)))))))
     (define (update-states sts/f instruction)
       (let/cc cc
         (define sts (cond
@@ -113,23 +115,27 @@
           (cond (v) (else (cc sts))))
         (case/eq instruction
                  ((refresh) sts)
-                 ((last) (struct-copy states sts (cursor ((lambda (n) (if (zero? n) n (sub1 n))) (states-cursor sts)))))
-                 ((next) (struct-copy states sts (cursor ((lambda (n) (if (>= n (sub1 (states-cnt sts))) n (add1 n))) (states-cursor sts)))))
-                 ((zoom-in) (struct-copy states sts
-                                         (zoom1 ((lambda (n) (+ n 0.01)) (states-zoom1 sts)))
-                                         (zoom2 ((lambda (n) (+ n 0.01)) (states-zoom2 sts)))))
-                 ((zoom-out) (struct-copy states sts
-                                          (zoom1 ((lambda (n) (- n 0.01)) (states-zoom1 sts)))
-                                          (zoom2 ((lambda (n) (- n 0.01)) (states-zoom2 sts)))))
-                 #;((rotate1) (struct-copy states sts (rotate ((lambda (n) (- n 0.15)) (states-rotate sts)))))
-                 #;((rotate2) (struct-copy states sts (rotate ((lambda (n) (+ n 0.15)) (states-rotate sts)))))
+                 ((last) (load-page (struct-copy states sts (cursor ((lambda (n) (if (zero? n) n (sub1 n))) (states-cursor sts))))))
+                 ((next) (load-page (struct-copy states sts (cursor ((lambda (n) (if (>= n (sub1 (states-cnt sts))) n (add1 n))) (states-cursor sts))))))
+                 ((zoom-in)
+                  (load-page
+                   (struct-copy states sts
+                                (zoom1 ((lambda (n) (+ n 0.01)) (states-zoom1 sts)))
+                                (zoom2 ((lambda (n) (+ n 0.01)) (states-zoom2 sts))))))
+                 ((zoom-out)
+                  (load-page
+                   (struct-copy states sts
+                                (zoom1 ((lambda (n) (- n 0.01)) (states-zoom1 sts)))
+                                (zoom2 ((lambda (n) (- n 0.01)) (states-zoom2 sts))))))
+                 #;((rotate1) (load-page (struct-copy states sts (rotate ((lambda (n) (- n 0.15)) (states-rotate sts))))))
+                 #;((rotate2) (load-page (struct-copy states sts (rotate ((lambda (n) (+ n 0.15)) (states-rotate sts))))))
                  ((save-bitmap)
-                  (send (load-page sts/f) save-file
+                  (send (states-bitmap sts) save-file
                         (check/fallback
                          (put-file "Specify the file name of the bitmap"
                                    frame
                                    #f #f #f
-                                   window-style))
+                                   file-choosing-window-style))
                         ((compose1 (lambda (str/f) (string->symbol (check/fallback str/f))) get-text-from-user)
                          window-name
                          "Specify the format of the bitmap"
@@ -141,7 +147,7 @@
                   sts)
                  ((jump)
                   ((compose1
-                    (lambda (str/f) (struct-copy states sts (cursor (sub1 (string->number (check/fallback str/f))))))
+                    (lambda (str/f) (load-page (struct-copy states sts (cursor (sub1 (string->number (check/fallback str/f)))))))
                     get-text-from-user)
                    window-name
                    "Specify the page number"
@@ -157,14 +163,14 @@
                  ((right) (struct-copy states sts (x ((lambda (n) (+ n 10.0)) (states-x sts)))))
                  ((up) (struct-copy states sts (y ((lambda (n) (- n 10.0)) (states-y sts)))))
                  ((down) (struct-copy states sts (y ((lambda (n) (+ n 10.0)) (states-y sts)))))
-                 ((reset-settings) (make-states (states-doc sts) (states-cnt sts) (states-cursor sts) 1.0 1.0 #;0.0 0.0 0.0))
+                 ((reset-settings) (load-page (make-states (states-doc sts) (states-cnt sts) (states-cursor sts) 1.0 1.0 #;0.0 0.0 0.0)))
                  ((next-session) (new-session-states sts)))))
     (define (render sts/f)
       (if sts/f
-          (match-let (((states doc cnt cursor zoom1 zoom2 #;rotate x y) sts/f))
+          (match-let (((states doc cnt cursor bitmap zoom1 zoom2 #;rotate x y) sts/f))
             ;; Rendering
             (send dc clear)
-            (send dc draw-bitmap (load-page sts/f) x y))
+            (send dc draw-bitmap bitmap x y))
           (let ()
             (send dc clear)
             (send dc draw-bitmap help-bitmap 0.0 0.0))))
