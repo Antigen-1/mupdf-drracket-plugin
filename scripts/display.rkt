@@ -163,7 +163,7 @@
                  ((right) (struct-copy states sts (x ((lambda (n) (+ n 10.0)) (states-x sts)))))
                  ((up) (struct-copy states sts (y ((lambda (n) (- n 10.0)) (states-y sts)))))
                  ((down) (struct-copy states sts (y ((lambda (n) (+ n 10.0)) (states-y sts)))))
-                 ((reset-settings) (load-page (make-states (states-doc sts) (states-cnt sts) (states-cursor sts) 1.0 1.0 #;0.0 0.0 0.0)))
+                 ((reset-settings) (load-page (make-states (states-doc sts) (states-cnt sts) (states-cursor sts) #f 1.0 1.0 #;0.0 0.0 0.0)))
                  ((next-session) (new-session-states sts)))))
     (define (render sts/f)
       (if sts/f

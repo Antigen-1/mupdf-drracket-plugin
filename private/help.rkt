@@ -32,6 +32,7 @@
     (q "save the current page as a bitmap")
     (e "jump to the specified page")
     (c "(collect-garbage 'major)")
+    (x "reset settings")
     (z "open a document")))
 
 (define help-bitmap
